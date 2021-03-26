@@ -109,7 +109,28 @@ def checkDotnet() {
     Matcher matcher = extractVersion(output)
     if (matcher.size() > 0) {
         def curVersion = matcher[0][1]
-        def result = checkVersionAtLeast(curVersion, "2.0.0")
+        def result = checkVersionAtLeast(curVersion, "4.5.2")
+        if (!result) {
+            allConditionsMet = false
+        }
+    } else {
+        println "missing"
+        allConditionsMet = false
+    }
+}
+
+def checkGo() {
+    print "Detecting Go version:      "
+    def output
+    try {
+        output = "go version".execute().text
+    } catch (IOException e) {
+        output = ""
+    }
+    Matcher matcher = extractVersion(output)
+    if (matcher.size() > 0) {
+        def curVersion = matcher[0][1]
+        def result = checkVersionAtLeast(curVersion, "1.0.0")
         if (!result) {
             allConditionsMet = false
         }
@@ -422,40 +443,37 @@ def cEnabled = false
 def cppEnabled = false
 def dockerEnabled = false
 def dotnetEnabled = false
+def goEnabled = false
 def javaEnabled = true
 def logstashEnabled = false
 def pythonEnabled = false
+def proxiesEnabled = false
 def sandboxEnabled = false
 def apacheReleaseEnabled = false
 def activeProfiles = session.request.activeProfiles
 for (def activeProfile : activeProfiles) {
     if (activeProfile == "with-boost") {
         boostEnabled = true
-        println "boost"
     } else if (activeProfile == "with-c") {
         cEnabled = true
-        println "c"
     } else if (activeProfile == "with-cpp") {
         cppEnabled = true
-        println "cpp"
     } else if (activeProfile == "with-docker") {
         dockerEnabled = true
-        println "docker"
     } else if (activeProfile == "with-dotnet") {
+        goEnabled = true
+    } else if (activeProfile == "with-go") {
         dotnetEnabled = true
-        println "dotnet"
     } else if (activeProfile == "with-logstash") {
         logstashEnabled = true
-        println "logstash"
     } else if (activeProfile == "with-python") {
         pythonEnabled = true
-        println "python"
+    } else if (activeProfile == "with-proxies") {
+        proxiesEnabled = true
     } else if (activeProfile == "with-sandbox") {
         sandboxEnabled = true
-        println "sandbox"
     } else if (activeProfile == "apache-release") {
         apacheReleaseEnabled = true
-        println "apache-release"
     }
 }
 println ""
@@ -472,13 +490,29 @@ if (os == "win") {
     }
 }
 
+if (pythonEnabled && !proxiesEnabled) {
+    println "Currently the build of the python modules require the `with-proxies` profile to be enabled tpo."
+    allConditionsMet = false;
+}
+
 /////////////////////////////////////////////////////
 // Do the actual checks depending on the enabled
 // profiles.
 /////////////////////////////////////////////////////
 
+if (proxiesEnabled) {
+    checkBison()
+    if (!boostEnabled) {
+        checkBoost()
+    }
+}
+
 if (dotnetEnabled) {
     checkDotnet()
+}
+
+if (goEnabled) {
+    checkGo()
 }
 
 if (logstashEnabled) {
@@ -486,7 +520,12 @@ if (logstashEnabled) {
     checkJavaVersion(null, "11")
 }
 
-if (cppEnabled) {
+if (proxiesEnabled) {
+    checkFlex()
+    checkOpenSSL()
+}
+
+if (proxiesEnabled || cppEnabled) {
     checkClang()
     // The cmake-maven-plugin requires at least java 11
     checkJavaVersion("11", null)
@@ -503,7 +542,7 @@ if (cEnabled) {
     checkGcc()
 }
 
-if (cppEnabled) {
+if (proxiesEnabled || cppEnabled) {
     checkGpp()
 }
 
@@ -525,7 +564,7 @@ if (sandboxEnabled && dockerEnabled) {
     checkDocker()
 }
 
-if (cppEnabled || cEnabled) {
+if (proxiesEnabled || cppEnabled || cEnabled) {
     // CMake requires at least maven 3.6.0
     checkMavenVersion("3.6.0", null)
 }
